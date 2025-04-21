@@ -68,6 +68,8 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "model_intro_done" not in st.session_state:
     st.session_state.model_intro_done = False
+if "current_model" not in st.session_state:
+    st.session_state.current_model = None
 
 def parse_file(file):
     """Process uploaded file and return text content"""
@@ -167,29 +169,32 @@ def generate_response(prompt):
             for chunk in response:
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
-                    # Remove <think> and </think> tags
                     content = content.replace("<think>", "").replace("</think>", "")
                     full_response += content
                     yield content
         
         elif model_alias == "EdJa-Valonys":
-            # Cerebras API
+            # Cerebras API (non-streaming implementation)
             client = Cerebras(
                 api_key=os.getenv("CEREBRAS_API_KEY"),
             )
             
             response = client.chat.completions.create(
                 messages=messages,
-                model="llama-4-scout-17b-16e-instruct",
-                stream=True
+                model="llama-4-scout-17b-16e-instruct"
             )
             
-            full_response = ""
-            for chunk in response:
-                if chunk.choices[0].message.content:
-                    content = chunk.choices[0].message.content
-                    full_response += content
-                    yield content
+            # Handle Cerebras response format
+            if hasattr(response.choices[0], 'message'):
+                full_response = response.choices[0].message.content
+            else:
+                full_response = str(response.choices[0])
+            
+            # Simulate streaming for UI consistency
+            for word in full_response.split():
+                yield word + " "
+                time.sleep(0.05)
+            yield ""  # Final yield
         
         # Performance metrics
         input_tokens = len(prompt.split())
@@ -206,15 +211,15 @@ def generate_response(prompt):
         yield f"⚠️ API Error: {str(e)}"
 
 # Model-specific introductions
-if not st.session_state.model_intro_done:
+if not st.session_state.model_intro_done or st.session_state.current_model != model_alias:
     if model_alias == "EE Smartest Agent":
         intro_message = """
         Hi, I am **EE**, the Double E Agent! 🚀
 
         My creator considers me a Double E agent because I am:
-        - **Pragmatic**: I solve problems efficiently.
-        - **Innovative**: My reasoning capabilities go beyond human imagination.
-        - **Smart**: I am damn smarter than most systems out there.
+        - **Pragmatic**: I solve problems efficiently
+        - **Innovative**: My reasoning capabilities go beyond human imagination
+        - **Smart**: I am damn smarter than most systems out there
 
         How can I assist you today?
         """
@@ -223,9 +228,9 @@ if not st.session_state.model_intro_done:
         Hi, I am **JI**, the Divine Agent! ✨
 
         My creator considers me a Divine Agent because I am:
-        - **Gifted**: Trained to implement advanced reasoning.
-        - **Quasi-Human**: I mimic human intelligence and rational thinking.
-        - **Divine**: My capabilities are unparalleled.
+        - **Gifted**: Trained to implement advanced reasoning
+        - **Quasi-Human**: I mimic human intelligence and rational thinking
+        - **Divine**: My capabilities are unparalleled
 
         How may I assist you today?
         """
@@ -243,6 +248,7 @@ if not st.session_state.model_intro_done:
     
     st.session_state.chat_history.append({"role": "assistant", "content": intro_message})
     st.session_state.model_intro_done = True
+    st.session_state.current_model = model_alias
 
 # Chat interface
 for msg in st.session_state.chat_history:
