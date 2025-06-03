@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 import PyPDF2
 from docx import Document
 import pandas as pd
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-import torch
+import openai  # For DeepSeek API
+from cerebras.cloud.sdk import Cerebras  # For Cerebras API
 
 # Load environment variables
 load_dotenv()
@@ -19,7 +19,7 @@ BOT_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/99
 
 # Preconfigured bio response
 ATALIBA_BIO = """
-**I am Ataliba's Digital Twin** 🤖
+**I am Ataliba Miguel's Digital Twin** 🤖
 
 **Background:**
 - 🎓 Mechanical Engineering (BSc)
@@ -54,36 +54,12 @@ with st.sidebar:
     model_alias = st.selectbox(
         "Choose your AI Agent",
         options=["EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys"],
-        index=0,
+        index=0,  # Default to Grok
         help="Select the AI model for your session."
     )
 
     st.header("📁 Document Hub")
     uploaded_file = st.file_uploader("Upload technical documents", type=["pdf", "docx", "xlsx", "xlsm"])
-
-    # Device selection
-    device = st.selectbox(
-        "Select device",
-        options=["cuda" if torch.cuda.is_available() else "cpu", "cpu"],
-        index=0,
-        help="Select the device to run the model on (GPU recommended for larger models)"
-    )
-
-# Hugging Face model configurations
-MODEL_CONFIGS = {
-    "EE Smartest Agent": {
-        "repo_id": "mistralai/Mistral-7B-Instruct-v0.1",
-        "description": "Mistral 7B Instruct - A powerful 7B parameter model with strong reasoning capabilities"
-    },
-    "JI Divine Agent": {
-        "repo_id": "meta-llama/Llama-2-70b-chat-hf",
-        "description": "Llama 2 70B Chat - A large model with excellent conversational abilities"
-    },
-    "EdJa-Valonys": {
-        "repo_id": "Qwen/Qwen1.5-1.8B-Chat",
-        "description": "Qwen 1.8B Chat - A compact yet capable model optimized for chat"
-    }
-}
 
 # Session state initialization
 if "file_context" not in st.session_state:
@@ -94,56 +70,6 @@ if "model_intro_done" not in st.session_state:
     st.session_state.model_intro_done = False
 if "current_model" not in st.session_state:
     st.session_state.current_model = None
-if "model_pipeline" not in st.session_state:
-    st.session_state.model_pipeline = None
-if "tokenizer" not in st.session_state:
-    st.session_state.tokenizer = None
-
-def load_model(model_name):
-    """Load the selected Hugging Face model"""
-    if model_name not in MODEL_CONFIGS:
-        raise ValueError(f"Unknown model: {model_name}")
-    
-    repo_id = MODEL_CONFIGS[model_name]["repo_id"]
-    
-    # Check if we need to load a new model
-    if st.session_state.current_model != model_name:
-        st.sidebar.info(f"Loading {model_name} ({repo_id})...")
-        
-        # Clear previous model if exists
-        if st.session_state.model_pipeline is not None:
-            del st.session_state.model_pipeline
-            del st.session_state.tokenizer
-            torch.cuda.empty_cache()
-        
-        try:
-            # Load tokenizer and model
-            tokenizer = AutoTokenizer.from_pretrained(repo_id)
-            model = AutoModelForCausalLM.from_pretrained(
-                repo_id,
-                device_map="auto",
-                torch_dtype=torch.float16 if device == "cuda" else torch.float32
-            )
-            
-            # Create pipeline
-            pipe = pipeline(
-                "text-generation",
-                model=model,
-                tokenizer=tokenizer,
-                device=device
-            )
-            
-            st.session_state.tokenizer = tokenizer
-            st.session_state.model_pipeline = pipe
-            st.session_state.current_model = model_name
-            
-            st.sidebar.success(f"Successfully loaded {model_name}")
-            return pipe
-        except Exception as e:
-            st.sidebar.error(f"Failed to load model: {str(e)}")
-            return None
-    else:
-        return st.session_state.model_pipeline
 
 def parse_file(file):
     """Process uploaded file and return text content"""
@@ -182,78 +108,113 @@ def generate_response(prompt):
         return
 
     try:
-        # Load the selected model
-        pipe = load_model(model_alias)
-        if pipe is None:
-            yield "⚠️ Model failed to load. Please try again or select a different model."
-            return
-        
-        # Prepare messages
-        system_message = {
+        messages = [{
             "role": "system",
             "content": f"Expert technical assistant. Current document:\n{st.session_state.file_context}"
         } if st.session_state.file_context else {
             "role": "system",
             "content": "Expert technical assistant. Be concise and professional."
-        }
+        }]
         
-        user_message = {"role": "user", "content": prompt}
-        
-        # Format messages according to model requirements
-        if "mistral" in MODEL_CONFIGS[model_alias]["repo_id"].lower():
-            messages = f"<s>[INST] {system_message['content']}\n{user_message['content']} [/INST]"
-        elif "llama" in MODEL_CONFIGS[model_alias]["repo_id"].lower():
-            messages = [
-                {"role": "system", "content": system_message['content']},
-                {"role": "user", "content": user_message['content']}
-            ]
-            messages = pipe.tokenizer.apply_chat_template(messages, tokenize=False)
-        else:  # Default format for other models
-            messages = f"System: {system_message['content']}\nUser: {user_message['content']}\nAssistant:"
+        messages.append({"role": "user", "content": prompt})
         
         start = time.time()
         
-        # Generate response
-        response = pipe(
-            messages,
-            max_new_tokens=1024,
-            temperature=0.7,
-            top_p=0.9,
-            do_sample=True,
-            pad_token_id=pipe.tokenizer.eos_token_id,
-            streamer=None  # Could implement proper streaming in future
-        )
+        if model_alias == "EE Smartest Agent":
+            # Grok API
+            response = requests.post(
+                "https://api.x.ai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.getenv('API_KEY')}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "grok-beta",
+                    "messages": messages,
+                    "temperature": 0.2,
+                    "stream": True
+                },
+                stream=True
+            )
+            
+            full_response = ""
+            for line in response.iter_lines():
+                if line:
+                    chunk = line.decode('utf-8').replace('data: ', '')
+                    if chunk == '[DONE]': break
+                    try:
+                        data = json.loads(chunk)
+                        delta = data['choices'][0]['delta'].get('content', '')
+                        full_response += delta
+                        yield delta
+                    except:
+                        continue
+            
+        elif model_alias == "JI Divine Agent":
+            # DeepSeek API
+            client = openai.OpenAI(
+                api_key=os.getenv("DEEPSEEK_API_KEY"),
+                base_url="https://api.sambanova.ai/v1",
+            )
+            
+            response = client.chat.completions.create(
+                model="DeepSeek-R1-Distill-Llama-70B",
+                messages=messages,
+                temperature=0.1,
+                top_p=0.1,
+                stream=True
+            )
+            
+            full_response = ""
+            for chunk in response:
+                if chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    content = content.replace("<think>", "").replace("</think>", "")
+                    full_response += content
+                    yield content
         
-        # Process response based on model type
-        if isinstance(response, list):
-            full_response = response[0]['generated_text'][len(messages):]
-        else:
-            full_response = response['generated_text'][len(messages):]
-        
-        # Clean up response
-        full_response = full_response.split("</s>")[0].strip()
-        
-        # Simulate streaming for better UX
-        for word in full_response.split():
-            yield word + " "
-            time.sleep(0.05)
+        elif model_alias == "EdJa-Valonys":
+            # Cerebras API (non-streaming implementation)
+            client = Cerebras(
+                api_key=os.getenv("CEREBRAS_API_KEY"),
+            )
+            
+            response = client.chat.completions.create(
+                messages=messages,
+                model= "llama-4-scout-17b-16e-instruct" # "amiguel/GM_Qwen1.8B_Finetune" #
+            )
+            
+            # Handle Cerebras response format
+            if hasattr(response.choices[0], 'message'):
+                full_response = response.choices[0].message.content
+            else:
+                full_response = str(response.choices[0])
+            
+            # Simulate streaming for UI consistency
+            for word in full_response.split():
+                yield word + " "
+                time.sleep(0.05)
+            yield ""  # Final yield
         
         # Performance metrics
-        input_tokens = len(pipe.tokenizer.encode(messages))
-        output_tokens = len(pipe.tokenizer.encode(full_response))
+        input_tokens = len(prompt.split())
+        output_tokens = len(full_response.split())
+        input_cost = (input_tokens / 1000000) * 5  # Grok pricing example
+        output_cost = (output_tokens / 1000000) * 15  # Grok pricing example
+        total_cost_usd = input_cost + output_cost
+        exchange_rate = 1160  # USD to AOA
+        total_cost_aoa = total_cost_usd * exchange_rate
         speed = output_tokens / (time.time() - start)
-        
-        yield f"\n\n🔑 Input Tokens: {input_tokens} | Output Tokens: {output_tokens} | 🕒 Speed: {speed:.1f}t/s"
+        yield f"\n\n🔑 Input Tokens: {input_tokens} | Output Tokens: {output_tokens} | 🕒 Speed: {speed:.1f}t/s | 💰 Cost (USD): ${total_cost_usd:.4f} | 💵 Cost (AOA): {total_cost_aoa:.4f}"
         
     except Exception as e:
-        yield f"⚠️ Error generating response: {str(e)}"
+        yield f"⚠️ API Error: {str(e)}"
 
 # Model-specific introductions
 if not st.session_state.model_intro_done or st.session_state.current_model != model_alias:
     if model_alias == "EE Smartest Agent":
         intro_message = """
         Hi, I am **EE**, the Double E Agent! 🚀
-        Powered by Mistral-7B-Instruct from Hugging Face.
 
         My creator considers me a Double E agent because I am:
         - **Pragmatic**: I solve problems efficiently
@@ -265,7 +226,6 @@ if not st.session_state.model_intro_done or st.session_state.current_model != mo
     elif model_alias == "JI Divine Agent":
         intro_message = """
         Hi, I am **JI**, the Divine Agent! ✨
-        Powered by Llama-2-70b-chat from Hugging Face.
 
         My creator considers me a Divine Agent because I am:
         - **Gifted**: Trained to implement advanced reasoning
@@ -277,11 +237,10 @@ if not st.session_state.model_intro_done or st.session_state.current_model != mo
     elif model_alias == "EdJa-Valonys":
         intro_message = """
         Greetings, I am **EdJa-Valonys**! ⚡
-        Powered by Qwen1.5-1.8B-Chat from Hugging Face.
 
-        The cutting-edge open-source agent with:
+        The cutting-edge Cerebras-powered agent with:
         - **Lightning-fast inference**: Optimized for speed and efficiency
-        - **Precision engineering**: Built on advanced architecture
+        - **Precision engineering**: Built on Llama-4 architecture
         - **Industrial-grade performance**: Designed for technical excellence
 
         What challenge can I help you solve today?
