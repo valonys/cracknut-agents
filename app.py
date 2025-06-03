@@ -19,7 +19,7 @@ BOT_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/99
 
 # Preconfigured bio response
 ATALIBA_BIO = """
-**I am Ataliba Miguel's Digital Twin** 🤖
+**I am Ataliba's Digital Twin** 🤖
 
 **Background:**
 - 🎓 Mechanical Engineering (BSc)
