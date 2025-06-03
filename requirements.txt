@@ -4,9 +4,9 @@
 #PyPDF2>=3.0.0
 #python-docx>=0.8.11
 #pandas>=2.0.0
-#openai>=1.0.0
-#cerebras-cloud-sdk>=1.0.0
-#openpyxl
+openai>=1.0.0
+cerebras-cloud-sdk>=1.0.0
+openpyxl
 streamlit==1.32.0
 requests==2.31.0
 python-dotenv==1.0.0
