@@ -181,7 +181,7 @@ def generate_response(prompt):
             
             response = client.chat.completions.create(
                 messages=messages,
-                model= " " #"amiguel/GM_Qwen1.8B_Finetune" #"llama-4-scout-17b-16e-instruct"
+                model= "amiguel/GM_Qwen1.8B_Finetune" #"llama-4-scout-17b-16e-instruct"
             )
             
             # Handle Cerebras response format
