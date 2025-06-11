@@ -14,11 +14,10 @@ from cerebras.cloud.sdk import Cerebras
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.docstore.document import Document
 from langchain_community.document_loaders import PyPDFLoader
 import tempfile
 
-# --- ENV ---
+# --- Load .env ---
 load_dotenv()
 
 # --- Avatars ---
@@ -34,7 +33,7 @@ SYSTEM_PROMPT = (
     "field experience, industry regulations, and proven methodologies in asset integrity and reliability engineering."
 )
 
-# --- App Style ---
+# --- UI Style ---
 st.markdown("""
     <style>
     @import url('https://fonts.cdnfonts.com/css/tw-cen-mt');
@@ -44,24 +43,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 st.title("🚀 Ataliba o Agent Nerdx 🚀")
 
-# --- Sidebar UI ---
+# --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ Model Selection")
     model_alias = st.selectbox(
         "Choose your AI Agent",
         options=["EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys"],
         index=0,
-        help="Select the AI model for your session."
     )
-
     st.header("📁 Document Hub")
-    uploaded_files = st.file_uploader(
-        "Upload technical documents (PDF only)", type=["pdf"], accept_multiple_files=True
-    )
+    uploaded_files = st.file_uploader("Upload up to 10 PDFs", type=["pdf"], accept_multiple_files=True)
     if uploaded_files:
-        st.session_state.faiss_db = None  # Reset on new upload
+        st.session_state.faiss_db = None
 
-# --- FAISS Memory Setup ---
+# --- FAISS Setup ---
 @st.cache_resource
 def build_faiss_vectorstore(_docs):
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
@@ -77,17 +72,13 @@ def process_uploaded_pdfs(files):
             docs = loader.load()
             all_docs.extend(docs)
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
-    split_docs = splitter.split_documents(all_docs)
-    print(f"[INFO] Loaded and split {len(split_docs)} chunks from {len(files)} PDF(s)")
-    return build_faiss_vectorstore(split_docs)
+    return build_faiss_vectorstore(splitter.split_documents(all_docs))
 
 def retrieve_context(query, db, k=4):
-    retrieved_docs = db.similarity_search(query, k=k)
-    return "\n---\n".join(doc.page_content for doc in retrieved_docs)
+    results = db.similarity_search(query, k=k)
+    return "\n---\n".join(doc.page_content for doc in results)
 
-# --- Session Setup ---
-if "file_context" not in st.session_state:
-    st.session_state.file_context = None
+# --- Session State ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "model_intro_done" not in st.session_state:
@@ -97,40 +88,25 @@ if "current_model" not in st.session_state:
 if uploaded_files and "faiss_db" not in st.session_state:
     st.session_state.faiss_db = process_uploaded_pdfs(uploaded_files)
 
-# --- Model Introductions ---
+# --- Intro Message Per Model ---
 if not st.session_state.model_intro_done or st.session_state.current_model != model_alias:
     if model_alias == "EE Smartest Agent":
-        intro_message = """
-        Hi, I am **EE**, the Double E Agent! 🚀  
-        - **Pragmatic**: I solve problems efficiently  
-        - **Innovative**: My reasoning goes beyond human limits  
-        - **Smart**: I outclass most systems  
-        """
+        intro_message = "Hi, I am **EE**, the Double E Agent! 🚀"
     elif model_alias == "JI Divine Agent":
-        intro_message = """
-        Hi, I am **JI**, the Divine Agent! ✨  
-        - **Gifted**: Advanced reasoning  
-        - **Quasi-Human**: Intuitive intelligence  
-        - **Divine**: Unmatched capabilities  
-        """
+        intro_message = "Hi, I am **JI**, the Divine Agent! ✨"
     elif model_alias == "EdJa-Valonys":
-        intro_message = """
-        Greetings, I am **EdJa-Valonys**! ⚡  
-        - **Lightning-fast** Cerebras inference  
-        - **Llama-4 core**  
-        - **Industrial-grade** excellence  
-        """
+        intro_message = "Greetings, I am **EdJa-Valonys**! ⚡"
     st.session_state.chat_history.append({"role": "assistant", "content": intro_message})
     st.session_state.model_intro_done = True
     st.session_state.current_model = model_alias
 
-# --- Display Chat History ---
+# --- Chat History Rendering ---
 for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"], avatar=USER_AVATAR if msg["role"] == "user" else BOT_AVATAR):
         st.markdown(msg["content"])
 
-# --- Chat Input Handler ---
-if prompt := st.chat_input("Ask about documents or technical matters..."):
+# --- Chat Logic ---
+if prompt := st.chat_input("Ask about inspection, maintenance, or document contents..."):
     st.session_state.chat_history.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt)
@@ -139,7 +115,6 @@ if prompt := st.chat_input("Ask about documents or technical matters..."):
         response_placeholder = st.empty()
         full_response = ""
 
-        # Safely inject RAG context if FAISS DB is ready
         try:
             if uploaded_files and st.session_state.faiss_db:
                 context = retrieve_context(prompt, st.session_state.faiss_db)
@@ -150,9 +125,72 @@ if prompt := st.chat_input("Ask about documents or technical matters..."):
             st.warning(f"⚠️ Document retrieval failed: {e}")
             final_prompt = f"{SYSTEM_PROMPT}\n\nQuestion: {prompt}"
 
-        # Dummy response generator – replace with your model inference
-        def generate_response(query):
-            yield "🔧 This is a placeholder response. Connect your model inference here."
+        def generate_response(prompt):
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ]
+            try:
+                if model_alias == "EE Smartest Agent":
+                    response = requests.post(
+                        "https://api.x.ai/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {os.getenv('API_KEY')}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "grok-beta",
+                            "messages": messages,
+                            "temperature": 0.2,
+                            "stream": True,
+                        },
+                        stream=True,
+                    )
+                    full = ""
+                    for line in response.iter_lines():
+                        if line:
+                            chunk = line.decode("utf-8").replace("data: ", "")
+                            if chunk == "[DONE]": break
+                            try:
+                                data = json.loads(chunk)
+                                delta = data["choices"][0]["delta"].get("content", "")
+                                full += delta
+                                yield delta
+                            except:
+                                continue
+
+                elif model_alias == "JI Divine Agent":
+                    client = openai.OpenAI(
+                        api_key=os.getenv("DEEPSEEK_API_KEY"),
+                        base_url="https://api.sambanova.ai/v1"
+                    )
+                    response = client.chat.completions.create(
+                        model="DeepSeek-R1-Distill-Llama-70B",
+                        messages=messages,
+                        temperature=0.1,
+                        top_p=0.1,
+                        stream=True
+                    )
+                    full = ""
+                    for chunk in response:
+                        if chunk.choices[0].delta.content:
+                            content = chunk.choices[0].delta.content.replace("<think>", "").replace("</think>", "")
+                            full += content
+                            yield content
+
+                elif model_alias == "EdJa-Valonys":
+                    client = Cerebras(api_key=os.getenv("CEREBRAS_API_KEY"))
+                    response = client.chat.completions.create(
+                        model="llama-4-scout-17b-16e-instruct",
+                        messages=messages,
+                    )
+                    full = response.choices[0].message.content
+                    for word in full.split():
+                        yield word + " "
+                        time.sleep(0.05)
+                    yield ""
+            except Exception as e:
+                yield f"⚠️ API Error: {e}"
 
         for chunk in generate_response(final_prompt):
             full_response += chunk
