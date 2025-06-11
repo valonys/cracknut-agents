@@ -1,14 +1,25 @@
-streamlit
-openai
-requests
-cerebras
-PyPDF2
-python-docx
-pandas
-transformers
-huggingface-hub
-torch
-sentence-transformers
-langchain
-faiss-cpu
-langchain-community
+ Streamlit UI
+streamlit>=1.32.0
+
+# API & HTTP
+#requests>=2.31.0
+python-dotenv>=1.0.0
+openai>=1.16.2
+
+# PDF, Word, Excel parsing
+PyPDF2>=3.0.1
+python-docx>=1.1.0
+pandas>=2.2.2
+
+# Hugging Face models
+torch>=2.1.2
+transformers>=4.40.0
+sentence-transformers>=2.6.1
+accelerate>=0.28.0
+
+# LangChain + FAISS for RAG
+langchain>=0.1.16
+faiss-cpu>=1.7.4Add commentMore actions
+
+# Cerebras SDK
+cerebras-cloud>=0.1.0
