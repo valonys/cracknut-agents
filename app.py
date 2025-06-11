@@ -17,16 +17,15 @@ from langchain.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document as LCDocument
 
-# --- Load secrets ---
+# Load environment variables
 load_dotenv()
 HF_TOKEN = os.getenv("HF_TOKEN")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")
 XAI_API_KEY = os.getenv("API_KEY")
 
-# --- UI Config ---
 st.set_page_config(page_title="DigiTwin RAG", layout="centered")
-st.title("📊 DigiTwin Nerdzx")
+st.title("📊 DigiTwin Nerdxz")
 
 USER_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/9904d9a0d445ab0488cf7395cb863cce7621d897/USER_AVATAR.png"
 BOT_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/991f4c6e4e1dc7a8e24876ca5aae5228bcdb4dba/Ataliba_Avatar.jpg"
@@ -37,17 +36,17 @@ SYSTEM_PROMPT = (
     "along with a predictive progress assessment."
 )
 
-# --- Sidebar ---
+# Sidebar
 with st.sidebar:
     model_alias = st.selectbox("Choose your AI Agent", [
         "EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys",
         "Llama3 Expert (HF)", "Qwen Inspector (HF)"
     ])
     uploaded_files = st.file_uploader(
-        "Upload up to 10 inspection PDFs", type=["pdf"], accept_multiple_files=True, key="multi_file_upload"
+        "Upload up to 10 inspection PDFs", type=["pdf"], accept_multiple_files=True
     )
 
-# --- Session state ---
+# Session state
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "file_contexts" not in st.session_state:
@@ -57,23 +56,22 @@ if "vectorstore" not in st.session_state:
 if "last_model" not in st.session_state:
     st.session_state.last_model = None
 
-# --- Show Welcome Message per Model ---
+# Model greeting
 if st.session_state.last_model != model_alias:
     if model_alias == "EE Smartest Agent":
-        intro = "👋 Hi, I’m **EE**, the Smartest Agent.\n\n- Trained on pragmatic reasoning\n- Capable of KPI analysis and anomaly detection\n- Works well with summarized technical reports"
+        intro = "👋 Hi, I’m **EE**, the Smartest Agent.\n\n- Pragmatic KPI analysis\n- Anomaly detection\n- Document-aware reasoning"
     elif model_alias == "JI Divine Agent":
-        intro = "👋 Hi, I’m **JI**, the Divine Agent.\n\n- Expert at predictive reasoning\n- Finds hidden KPI trends\n- Handles complex site diagnostics"
+        intro = "👋 Hi, I’m **JI**, the Divine Agent.\n\n- Predictive logic\n- KPI forecasting\n- Insightful and analytical"
     elif model_alias == "EdJa-Valonys":
-        intro = "👋 Hi, I’m **EdJa-Valonys** ⚡\n\n- Lightning-fast analysis\n- Built on Llama4 Instruct\n- Made for engineering-grade evaluations"
+        intro = "⚡ Hi, I’m **EdJa-Valonys**.\n\n- Built on LLaMA4\n- Optimized for inspection engineering\n- Fast and structured"
     else:
         intro = None
-
     if intro:
         st.chat_message("assistant", avatar=BOT_AVATAR).markdown(intro)
         st.session_state.chat_history.append({"role": "assistant", "content": intro})
     st.session_state.last_model = model_alias
 
-# --- File Parser ---
+# File parsing
 def parse_file(file):
     try:
         if file.type == "application/pdf":
@@ -88,7 +86,6 @@ def parse_file(file):
     except Exception as e:
         return f"Failed to parse file: {e}"
 
-# --- Embeddings & HF Loader ---
 @st.cache_resource
 def get_embeddings():
     return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
@@ -116,33 +113,31 @@ def run_hf_streaming_model(prompt, model, tokenizer):
     for new_text in streamer:
         yield new_text
 
-# --- Document Summarization ---
+# Process uploaded files
 doc_chunks, daily_summaries = [], []
 
 if uploaded_files:
     for file in uploaded_files[:10]:
-        raw_text = parse_file(file)
-        if raw_text:
-            doc_chunks.append(raw_text)
-            daily_summaries.append(f"📄 {file.name}:\n{raw_text[:1000]}...\n")
+        text = parse_file(file)
+        if text:
+            doc_chunks.append(text)
+            daily_summaries.append(f"📄 {file.name}:\n{text[:1000]}...\n")
 
-# --- RAG Setup ---
+# Build vectorstore if available
 if doc_chunks:
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     split_docs = splitter.split_documents([LCDocument(page_content=t) for t in doc_chunks])
     st.session_state.vectorstore = FAISS.from_documents(split_docs, get_embeddings())
 
-# --- RAG Response Generator ---
+# Response generator
 def generate_response(prompt):
     try:
         rag_context = ""
         if daily_summaries:
             rag_context = (
-                "\n\n---\nYou are provided with 5-day inspection reports from the same site (e.g. Dalia).\n"
-                "Extract KPI summaries for each day and forecast the likely 5-day progress trend.\n"
-                "Base your insights on patterns of: ADHOC items, PSV installations, VIE/VII campaigns, "
-                "crew holds, and SAP anomalies.\n\n" +
-                "\n".join(daily_summaries[:5])
+                "\n\n---\nYou are provided with 5-day inspection reports from the same site.\n"
+                "Summarize KPI progress trends and predict the next 5-day outlook.\n\n"
+                + "\n".join(daily_summaries[:5])
             )
 
         messages = [
@@ -158,23 +153,15 @@ def generate_response(prompt):
                 stream=True
             )
             for line in response.iter_lines():
-                #if line:
-                    #line = line.decode().replace("data: ", "")
-                    #if line == "[DONE]": break
-                    #yield json.loads(line)["choices"][0]["delta"].get("content", "")
-                   
                 if line:
-                    line = line.decode("utf-8").replace("data: ", "")
-                    if line == "[DONE]": 
-                        break
+                    line = line.decode().replace("data: ", "")
+                    if line == "[DONE]": break
                     try:
                         data = json.loads(line)
                         if "choices" in data and "delta" in data["choices"][0]:
-                            delta = data["choices"][0]["delta"].get("content", "")
-                            yield delta
-                     except Exception as e:
-                            continue
-
+                            yield data["choices"][0]["delta"].get("content", "")
+                    except Exception:
+                        continue
 
         elif model_alias == "JI Divine Agent":
             client = openai.OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.sambanova.ai/v1")
@@ -207,21 +194,21 @@ def generate_response(prompt):
     except Exception as e:
         yield f"⚠️ Error: {e}"
 
-# --- Chat History ---
+# Show chat history
 for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"], avatar=USER_AVATAR if msg["role"] == "user" else BOT_AVATAR):
         st.markdown(msg["content"])
 
-# --- Input ---
-if prompt := st.chat_input("Ask about daily KPIs, anomalies, or forecast..."):
+# Chat input and streaming output
+if prompt := st.chat_input("Ask about KPIs, anomalies, or forecast..."):
     st.chat_message("user", avatar=USER_AVATAR).markdown(prompt)
     st.session_state.chat_history.append({"role": "user", "content": prompt})
 
     with st.chat_message("assistant", avatar=BOT_AVATAR):
         response_placeholder = st.empty()
         full_response = ""
-        for chunk in generate_response(prompt):
-            full_response += chunk
+        for token in generate_response(prompt):
+            full_response += token
             response_placeholder.markdown(full_response + "▌")
         response_placeholder.markdown(full_response)
         st.session_state.chat_history.append({"role": "assistant", "content": full_response})
