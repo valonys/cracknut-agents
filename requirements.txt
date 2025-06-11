@@ -9,6 +9,6 @@ transformers
 huggingface-hub
 torch
 sentence-transformers
-langchain>=0.1.16
+langchain
 faiss-cpu
 langchain-community
