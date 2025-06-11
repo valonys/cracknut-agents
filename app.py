@@ -158,10 +158,23 @@ def generate_response(prompt):
                 stream=True
             )
             for line in response.iter_lines():
+                #if line:
+                    #line = line.decode().replace("data: ", "")
+                    #if line == "[DONE]": break
+                    #yield json.loads(line)["choices"][0]["delta"].get("content", "")
+                   
                 if line:
-                    line = line.decode().replace("data: ", "")
-                    if line == "[DONE]": break
-                    yield json.loads(line)["choices"][0]["delta"].get("content", "")
+                    line = line.decode("utf-8").replace("data: ", "")
+                    if line == "[DONE]": 
+                        break
+                    try:
+                        data = json.loads(line)
+                        if "choices" in data and "delta" in data["choices"][0]:
+                            delta = data["choices"][0]["delta"].get("content", "")
+                            yield delta
+                     except Exception as e:
+                            continue
+
 
         elif model_alias == "JI Divine Agent":
             client = openai.OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.sambanova.ai/v1")
