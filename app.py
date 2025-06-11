@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 import PyPDF2
 from docx import Document
 import pandas as pd
-import openai  # For DeepSeek API
-from cerebras.cloud.sdk import Cerebras  # For Cerebras API
+import openai
+from cerebras.cloud.sdk import Cerebras
 
 # --- RAG Imports ---
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -77,7 +77,9 @@ def process_uploaded_pdfs(files):
             docs = loader.load()
             all_docs.extend(docs)
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
-    return build_faiss_vectorstore(splitter.split_documents(all_docs))
+    split_docs = splitter.split_documents(all_docs)
+    print(f"[INFO] Loaded and split {len(split_docs)} chunks from {len(files)} PDF(s)")
+    return build_faiss_vectorstore(split_docs)
 
 def retrieve_context(query, db, k=4):
     retrieved_docs = db.similarity_search(query, k=k)
@@ -137,14 +139,18 @@ if prompt := st.chat_input("Ask about documents or technical matters..."):
         response_placeholder = st.empty()
         full_response = ""
 
-        # Inject RAG context if available
-        if "faiss_db" in st.session_state:
-            context = retrieve_context(prompt, st.session_state.faiss_db)
-            final_prompt = f"{SYSTEM_PROMPT}\n\nContext:\n{context}\n\nQuestion: {prompt}"
-        else:
+        # Safely inject RAG context if FAISS DB is ready
+        try:
+            if uploaded_files and st.session_state.faiss_db:
+                context = retrieve_context(prompt, st.session_state.faiss_db)
+                final_prompt = f"{SYSTEM_PROMPT}\n\nContext:\n{context}\n\nQuestion: {prompt}"
+            else:
+                raise ValueError("No document context available.")
+        except Exception as e:
+            st.warning(f"⚠️ Document retrieval failed: {e}")
             final_prompt = f"{SYSTEM_PROMPT}\n\nQuestion: {prompt}"
 
-        # Dummy response generator – replace with actual model call
+        # Dummy response generator – replace with your model inference
         def generate_response(query):
             yield "🔧 This is a placeholder response. Connect your model inference here."
 
