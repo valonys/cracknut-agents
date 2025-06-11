@@ -18,6 +18,7 @@ nltk
 torch
 transformers
 langchain
+langchain-community
 #faiss-cpu
 sentence-transformers
 huggingface-hub
