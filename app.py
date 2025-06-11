@@ -84,7 +84,13 @@ def run_hf_streaming(prompt, model, tokenizer):
 # FAISS vectorstore build
 @st.cache_resource
 def build_faiss_vectorstore(docs):
-    return FAISS.from_documents(docs, embedding=get_embeddings())
+    return FAISS.from_documents(_docs, embedding=get_embeddings())
+
+#@st.cache_resource
+#def build_faiss_vectorstore(_docs):
+#    return FAISS.from_documents(_docs, embedding=get_embeddings())
+
+
 
 # Build doc memory
 doc_chunks = []
