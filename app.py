@@ -24,38 +24,56 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")
 XAI_API_KEY = os.getenv("API_KEY")
 
-# --- Page settings ---
+# --- UI Config ---
 st.set_page_config(page_title="DigiTwin RAG", layout="centered")
-st.title("📊 DigiTwin RAG")
+st.title("📊 DigiTwin Nerdzx")
 
-# Avatars
 USER_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/9904d9a0d445ab0488cf7395cb863cce7621d897/USER_AVATAR.png"
 BOT_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/991f4c6e4e1dc7a8e24876ca5aae5228bcdb4dba/Ataliba_Avatar.jpg"
 
-# System prompt
 SYSTEM_PROMPT = (
     "You are DigiTwin, a senior topside inspection engineer. Your task is to analyze and compare the content "
     "of multiple inspection reports, extract trends and KPIs, and provide an evaluation of the last 5 days of operations "
     "along with a predictive progress assessment."
 )
 
-# Sidebar
+# --- Sidebar ---
 with st.sidebar:
     model_alias = st.selectbox("Choose your AI Agent", [
         "EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys",
         "Llama3 Expert (HF)", "Qwen Inspector (HF)"
     ])
-    uploaded_files = st.file_uploader("Upload up to 10 PDF reports", type=["pdf"], accept_multiple_files=True, key="multi_file_upload")
+    uploaded_files = st.file_uploader(
+        "Upload up to 10 inspection PDFs", type=["pdf"], accept_multiple_files=True, key="multi_file_upload"
+    )
 
-# Session state
+# --- Session state ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "file_contexts" not in st.session_state:
     st.session_state.file_contexts = []
 if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
+if "last_model" not in st.session_state:
+    st.session_state.last_model = None
 
-# PDF Parsing
+# --- Show Welcome Message per Model ---
+if st.session_state.last_model != model_alias:
+    if model_alias == "EE Smartest Agent":
+        intro = "👋 Hi, I’m **EE**, the Smartest Agent.\n\n- Trained on pragmatic reasoning\n- Capable of KPI analysis and anomaly detection\n- Works well with summarized technical reports"
+    elif model_alias == "JI Divine Agent":
+        intro = "👋 Hi, I’m **JI**, the Divine Agent.\n\n- Expert at predictive reasoning\n- Finds hidden KPI trends\n- Handles complex site diagnostics"
+    elif model_alias == "EdJa-Valonys":
+        intro = "👋 Hi, I’m **EdJa-Valonys** ⚡\n\n- Lightning-fast analysis\n- Built on Llama4 Instruct\n- Made for engineering-grade evaluations"
+    else:
+        intro = None
+
+    if intro:
+        st.chat_message("assistant", avatar=BOT_AVATAR).markdown(intro)
+        st.session_state.chat_history.append({"role": "assistant", "content": intro})
+    st.session_state.last_model = model_alias
+
+# --- File Parser ---
 def parse_file(file):
     try:
         if file.type == "application/pdf":
@@ -70,7 +88,7 @@ def parse_file(file):
     except Exception as e:
         return f"Failed to parse file: {e}"
 
-# Embeddings + FAISS
+# --- Embeddings & HF Loader ---
 @st.cache_resource
 def get_embeddings():
     return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
@@ -98,7 +116,7 @@ def run_hf_streaming_model(prompt, model, tokenizer):
     for new_text in streamer:
         yield new_text
 
-# Load and summarize documents
+# --- Document Summarization ---
 doc_chunks, daily_summaries = [], []
 
 if uploaded_files:
@@ -106,16 +124,15 @@ if uploaded_files:
         raw_text = parse_file(file)
         if raw_text:
             doc_chunks.append(raw_text)
-            summary_line = f"📄 {file.name}:\n{raw_text[:1000]}...\n"
-            daily_summaries.append(summary_line)
+            daily_summaries.append(f"📄 {file.name}:\n{raw_text[:1000]}...\n")
 
-# Vector DB
+# --- RAG Setup ---
 if doc_chunks:
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     split_docs = splitter.split_documents([LCDocument(page_content=t) for t in doc_chunks])
     st.session_state.vectorstore = FAISS.from_documents(split_docs, get_embeddings())
 
-# Chat generator
+# --- RAG Response Generator ---
 def generate_response(prompt):
     try:
         rag_context = ""
@@ -177,12 +194,12 @@ def generate_response(prompt):
     except Exception as e:
         yield f"⚠️ Error: {e}"
 
-# Display history
+# --- Chat History ---
 for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"], avatar=USER_AVATAR if msg["role"] == "user" else BOT_AVATAR):
         st.markdown(msg["content"])
 
-# Chat input
+# --- Input ---
 if prompt := st.chat_input("Ask about daily KPIs, anomalies, or forecast..."):
     st.chat_message("user", avatar=USER_AVATAR).markdown(prompt)
     st.session_state.chat_history.append({"role": "user", "content": prompt})
