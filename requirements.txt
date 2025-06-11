@@ -10,3 +10,4 @@ openpyxl
 sentence-transformers 
 faiss-cpu 
 nltk
+accelerate
