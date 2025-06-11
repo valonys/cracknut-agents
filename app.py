@@ -45,7 +45,7 @@ with st.sidebar:
         "EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys",
         "Llama3 Expert (HF)", "Qwen Inspector (HF)"
     ])
-    uploaded_files = st.file_uploader("Upload up to 10 PDF reports", type=["pdf"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Upload up to 10 PDF reports", type=["pdf"], accept_multiple_files=True, key="multi_file_upload")
 
 # Session state
 if "chat_history" not in st.session_state:
