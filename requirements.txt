@@ -7,3 +7,6 @@ pandas>=2.0.0
 openai>=1.0.0
 cerebras-cloud-sdk>=1.0.0
 openpyxl
+sentence-transformers 
+faiss-cpu 
+nltk
