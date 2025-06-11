@@ -1,8 +1,8 @@
- Streamlit UI
-streamlit>=1.26.0
+# Streamlit UI
+streamlit>=1.32.0
 
 # API & HTTP
-#requests>=2.31.0
+requests>=2.31.0
 python-dotenv>=1.0.0
 openai>=1.16.2
 
@@ -19,10 +19,7 @@ accelerate>=0.28.0
 
 # LangChain + FAISS for RAG
 langchain>=0.1.16
-faiss-cpu>=1.7.4Add commentMore actions
+faiss-cpu>=1.7.4
 
 # Cerebras SDK
 cerebras-cloud>=0.1.0
---upgrade pip
-pip
-
