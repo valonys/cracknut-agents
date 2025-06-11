@@ -3,29 +3,27 @@ import os
 import time
 import json
 import PyPDF2
-import textwrap
-import pandas as pd
-from docx import Document
-from threading import Thread
-from dotenv import load_dotenv
-
 import openai
 import requests
+import pandas as pd
+from docx import Document
+from dotenv import load_dotenv
 from cerebras.cloud.sdk import Cerebras
+from threading import Thread
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import FAISS
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document as LCDocument
 
-# Load .env keys
+# Load keys
 load_dotenv()
 HF_TOKEN = os.getenv("HF_TOKEN")
-XAI_KEY = os.getenv("API_KEY", None)
-DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", None)
-CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", None)
+XAI_KEY = os.getenv("API_KEY", "")
+DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
 
-# UI Setup
+# UI config
 st.set_page_config(page_title="DigiTwin RAG", layout="centered")
 st.title("📊 DigiTwin RAG Forecast")
 
@@ -33,8 +31,9 @@ USER_AVATAR = "🧑‍💼"
 BOT_AVATAR = "🤖"
 
 SYSTEM_PROMPT = (
-    "You are DigiTwin, a senior offshore topside inspection engineer. Analyze uploaded inspection reports "
-    "to extract key KPIs, ADHOC maintenance trends, anomalies, and forecast progress outlook over the next 5 days."
+    "You are DigiTwin, a senior offshore topside inspection engineer. "
+    "Your job is to analyze daily inspection reports uploaded, summarize the KPIs (especially Compl, Not Compl), "
+    "identify any backlog trends or issues, and forecast likely work execution trends over the next 5 days."
 )
 
 # Sidebar
@@ -42,7 +41,7 @@ with st.sidebar:
     model_alias = st.selectbox("Choose AI Agent", ["EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys", "Llama3 Expert"])
     uploaded_files = st.file_uploader("📁 Upload up to 10 PDF reports", type=["pdf"], accept_multiple_files=True)
 
-# State
+# State init
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "last_model" not in st.session_state:
@@ -50,7 +49,7 @@ if "last_model" not in st.session_state:
 if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
 
-# Parse uploaded files
+# File parsing
 def parse_file(file):
     try:
         reader = PyPDF2.PdfReader(file)
@@ -82,7 +81,12 @@ def run_hf_streaming(prompt, model, tokenizer):
     for token in streamer:
         yield token
 
-# Process file upload and build vectorstore
+# FAISS vectorstore build
+@st.cache_resource
+def build_faiss_vectorstore(docs):
+    return FAISS.from_documents(docs, embedding=get_embeddings())
+
+# Build doc memory
 doc_chunks = []
 if uploaded_files:
     for file in uploaded_files[:10]:
@@ -92,44 +96,33 @@ if uploaded_files:
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     docs = splitter.split_documents([LCDocument(page_content=txt) for txt in doc_chunks])
-    st.session_state.vectorstore = Chroma.from_documents(docs, get_embeddings(), persist_directory="chroma_memory")
-    st.session_state.vectorstore.persist()
+    st.session_state.vectorstore = build_faiss_vectorstore(docs)
 
-# Welcoming messages
+# Welcome messages
 if st.session_state.last_model != model_alias:
-    if model_alias == "EE Smartest Agent":
-        msg = """Hi, I'm **EE**, the Double E Agent 🚀  
-- Efficient • Expert • Engineered for accuracy"""
-    elif model_alias == "JI Divine Agent":
-        msg = """Greetings, I'm **JI**, the Divine Agent ✨  
-- Gifted in reasoning • Quasi-human logic • Deep insight"""
-    elif model_alias == "EdJa-Valonys":
-        msg = """Hello, I'm **EdJa-Valonys** ⚡  
-- Cerebras-speed • Built for industry • Answers grounded in engineering logic"""
-    elif model_alias == "Llama3 Expert":
-        msg = """Hi, I'm **Llama3 Expert** 🦙  
-- Powered by Hugging Face  
-- Specialized for inspection and maintenance insights"""
-    st.chat_message("assistant", avatar=BOT_AVATAR).markdown(msg)
-    st.session_state.chat_history.append({"role": "assistant", "content": msg})
+    welcome = {
+        "EE Smartest Agent": "Hi, I'm **EE**, the Double E Agent 🚀\n- Efficient • Expert • Engineered for Accuracy",
+        "JI Divine Agent": "Greetings, I'm **JI**, the Divine Agent ✨\n- Gifted Reasoning • Quasi-Human Logic",
+        "EdJa-Valonys": "Hello, I'm **EdJa-Valonys** ⚡\n- Cerebras-speed • Built for Engineering Logic",
+        "Llama3 Expert": "Hi, I'm **Llama3 Expert** 🦙\n- Finetuned for industrial inspection insight"
+    }
+    st.chat_message("assistant", avatar=BOT_AVATAR).markdown(welcome[model_alias])
+    st.session_state.chat_history.append({"role": "assistant", "content": welcome[model_alias]})
     st.session_state.last_model = model_alias
 
 # Generate response
 def generate_response(prompt):
     context = ""
     if st.session_state.vectorstore:
-        top_docs = st.session_state.vectorstore.similarity_search(prompt, k=4)
-        context = "\n\n".join([doc.page_content for doc in top_docs])
+        retrieved = st.session_state.vectorstore.similarity_search(prompt, k=4)
+        context = "\n\n".join([doc.page_content for doc in retrieved])
 
-    final_prompt = f"{SYSTEM_PROMPT}\n\nContext:\n{context}\n\nUser: {prompt}"
+    full_prompt = f"{SYSTEM_PROMPT}\n\nContext:\n{context}\n\nUser: {prompt}"
 
     if model_alias == "EE Smartest Agent":
         response = requests.post(
             "https://api.x.ai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {XAI_KEY}",
-                "Content-Type": "application/json"
-            },
+            headers={"Authorization": f"Bearer {XAI_KEY}", "Content-Type": "application/json"},
             json={
                 "model": "grok-beta",
                 "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
@@ -174,16 +167,16 @@ def generate_response(prompt):
 
     elif model_alias == "Llama3 Expert":
         model, tokenizer = load_hf_model()
-        for token in run_hf_streaming(final_prompt, model, tokenizer):
+        for token in run_hf_streaming(full_prompt, model, tokenizer):
             yield token
 
-# Chat history UI
+# Display chat history
 for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"], avatar=USER_AVATAR if msg["role"] == "user" else BOT_AVATAR):
         st.markdown(msg["content"])
 
-# Input
-if prompt := st.chat_input("Ask a forecast or summary..."):
+# Prompt and Response UI
+if prompt := st.chat_input("Ask a forecast, KPI summary, or anomaly report..."):
     st.chat_message("user", avatar=USER_AVATAR).markdown(prompt)
     st.session_state.chat_history.append({"role": "user", "content": prompt})
 
