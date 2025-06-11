@@ -23,3 +23,4 @@ faiss-cpu>=1.7.4Add commentMore actions
 
 # Cerebras SDK
 cerebras-cloud>=0.1.0
+pip>=24.0
