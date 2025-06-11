@@ -26,7 +26,7 @@ XAI_API_KEY = os.getenv("API_KEY")
 
 # --- Page settings ---
 st.set_page_config(page_title="DigiTwin RAG", layout="centered")
-st.title("📊 DigiTwin RAG: 5-Day KPI Forecast")
+st.title("📊 DigiTwin RAG")
 
 # Avatars
 USER_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/9904d9a0d445ab0488cf7395cb863cce7621d897/USER_AVATAR.png"
