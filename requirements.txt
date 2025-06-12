@@ -21,4 +21,5 @@ sentencepiece==0.2.0
 bitsandbytes==0.42.0
 huggingface-hub==0.20.3
 sentence-transformers
+faiss-cpu
 
