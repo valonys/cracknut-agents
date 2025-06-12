@@ -39,7 +39,7 @@ SYSTEM_PROMPT = (
 # Sidebar
 with st.sidebar:
     uploaded_files = st.file_uploader("📁 Upload up to 10 PDFs", type=["pdf"], accept_multiple_files=True)
-    model_alias = st.selectbox("Choose Agent", ["EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys"])
+    model_alias = st.selectbox("Choose Agent", ["EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys", "HF-Llama3", "HF-Qwen"])
 
 # Session state init
 if "chat_history" not in st.session_state:
@@ -134,9 +134,11 @@ def generate_response(prompt):
 # Intro message per model
 if not st.session_state.intro_done or st.session_state.current_model != model_alias:
     intro = {
-        "EE Smartest Agent": "Hi, I'm **EE**, the proactive Insp-based engineer with strong capabilities in KPI analysis across B17. Ask me anything technical!",
-        "JI Divine Agent": "Hello, I'm **JI**, trained with reasoning on Insp-based tasks and technical knowledge. I'm here to help!",
-        "EdJa-Valonys": "Welcome! I'm **EdJa-Valonys**, optimized with GS's, GM's and CR's for rapid technical inference."
+        "EE Smartest Agent": "Hi, I'm **EE**, the pragmatic and smart Grok-based engineer. Ask me anything technical!",
+        "JI Divine Agent": "Hello, I'm **JI**, trained with divine reasoning via DeepSeek. I'm here to help!",
+        "EdJa-Valonys": "Welcome! I'm **EdJa-Valonys**, optimized with Cerebras for rapid technical inference.",
+        "HF-Llama3": "Hi, I'm Llama3, trained for inspection summaries and maintenance forecasting.",
+        "HF-Qwen": "Hello, Qwen here — specialized in topside inspection terminology and progress evaluation."
     }.get(model_alias, "")
     st.session_state.chat_history.append({"role": "assistant", "content": intro})
     st.session_state.intro_done = True
