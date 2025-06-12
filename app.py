@@ -24,7 +24,8 @@ st.markdown("""
     @import url('https://fonts.cdnfonts.com/css/tw-cen-mt');
     * { font-family: 'Tw Cen MT', sans-serif; }
     </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
 
 # --- UI Avatars ---
 USER_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/9904d9a0d445ab0488cf7395cb863cce7621d897/USER_AVATAR.png"
