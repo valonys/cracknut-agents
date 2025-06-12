@@ -52,7 +52,7 @@ with st.sidebar:
         index=0,
     )
     st.header("📁 Document Hub")
-    uploaded_files: # = st.file_uploader("Upload up to 10 PDFs", type=["pdf"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Upload up to 10 PDFs", type=["pdf"], accept_multiple_files=True)
     if uploaded_files:
         #st.session_state.faiss_db = None
         if "faiss_initialized" not in st.session_state:
