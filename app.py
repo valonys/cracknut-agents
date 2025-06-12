@@ -42,7 +42,7 @@ SYSTEM_PROMPT = (
 with st.sidebar:
     st.header("📁 Upload PDFs")
     uploaded_files = st.file_uploader("Upload up to 10 PDF Reports", type=["pdf"], accept_multiple_files=True)
-    model_alias = st.selectbox("Choose Agent", ["EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys", "HF-Llama3", "HF-Qwen"])
+    model_alias = st.selectbox("Choose Agent", ["EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys"])
 
 # --- Session state ---
 if "chat_history" not in st.session_state:
