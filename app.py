@@ -22,7 +22,7 @@ load_dotenv()
 st.markdown("""
     <style>
     @import url('https://fonts.cdnfonts.com/css/tw-cen-mt');
-    * { font-family: 'Tw Cen MT', sans-serif; }
+    * { font-family: 'Tw Cen MT', sans-serif !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -95,7 +95,7 @@ def generate_response(prompt):
     if st.session_state.vectorstore:
         docs = st.session_state.vectorstore.similarity_search(prompt, k=5)
         context = "\n\n".join([doc.page_content for doc in docs])
-        messages.append({"role": "system", "content": f"Context from reports:\n{context}"})
+        messages.append({"role": "system", "content": f"Context from reports:\n{context}")
     
     messages.append({"role": "user", "content": prompt})
     full_response = ""
@@ -108,7 +108,7 @@ def generate_response(prompt):
             stream=True
         )
         for chunk in response:
-            if chunk.choices and chunk.choices[0].delta:
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
                 delta = chunk.choices[0].delta.content
                 full_response += delta
                 yield f"<span style='font-family:Tw Cen MT'>{delta}</span>"
@@ -121,7 +121,7 @@ def generate_response(prompt):
             stream=True
         )
         for chunk in response:
-            if chunk.choices and chunk.choices[0].delta:
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
                 full_response += content
                 yield f"<span style='font-family:Tw Cen MT'>{content}</span>"
