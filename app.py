@@ -95,7 +95,7 @@ def generate_response(prompt):
     if st.session_state.vectorstore:
         docs = st.session_state.vectorstore.similarity_search(prompt, k=5)
         context = "\n\n".join([doc.page_content for doc in docs])
-        messages.append({"role": "system", "content": f"Context from reports:\n{context}")
+        messages.append({"role": "system", "content": f"Context from reports:\n{context}"})
     
     messages.append({"role": "user", "content": prompt})
     full_response = ""
