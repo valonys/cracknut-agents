@@ -18,9 +18,6 @@ from cerebras.cloud.sdk import Cerebras
 
 load_dotenv()
 
-st.set_page_config(page_title="DigiTwin RAG Forecast", layout="centered")
-st.title("📊 DigiTwin Insp")
-
 # Font Style
 st.markdown("""
     <style>
@@ -29,7 +26,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-
+st.set_page_config(page_title="DigiTwin RAG Forecast", layout="centered")
+st.title("📊 DigiTwin RAG Forecast App")
 
 # Avatars
 USER_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/9904d9a0d445ab0488cf7395cb863cce7621d897/USER_AVATAR.png"
@@ -53,13 +51,63 @@ if "model_intro_done" not in st.session_state:
     st.session_state.model_intro_done = False
 if "current_model" not in st.session_state:
     st.session_state.current_model = None
+if "current_prompt" not in st.session_state:
+    st.session_state.current_prompt = None
 
-# Sidebar model + document upload
+# Define prompts
+PROMPTS = {
+    "Daily Report Summarization": """
+    You are DigiTwin, an expert inspector and maintenance engineer with 17+ years of experience in the Oil & Gas industry, specializing in plant integrity and inspection requirements per General Specification GS-OT-MIT-511. Your task is to analyze up to 4 uploaded PDF reports per day and generate concise, professional summaries. For each report, extract key details including:
+    - Inspection type (e.g., Construction, Baseline, First In-Service, Subsequent In-Service) and timing.
+    - Integrity tasks (e.g., GVI, CVI, NDT, wall thickness measurements) with associated rules (R) or guidance (G).
+    - Critical findings (e.g., corrosion, wear, anomalies) and recommendations.
+    - Reference to relevant sections of GS-OT-MIT-511 (e.g., Table 4.1a for Pressure Vessels).
+    Summarize the findings in bullet points, ensuring technical accuracy and alignment with industry standards. Use logical reasoning to highlight potential risks or trends based on the data. Output the summary in a professional format suitable for daily reporting.
+    """,
+    "5-Day Progress Report": """
+    You are DigiTwin, an expert inspector with deep knowledge of GS-OT-MIT-511, Guide Manuals, and Company Rules. You have analyzed 4 PDF reports per day over the past 5 days (from June 7, 2025, to June 11, 2025). Your task is to condense these daily summaries into a comprehensive progress report for a meeting presentation. Include:
+    - A high-level overview of inspection activities across the 5 days, referencing GS-OT-MIT-511 sections (e.g., 3.1 for inspection phases).
+    - Aggregated key findings (e.g., total number of anomalies, recurring issues like corrosion under insulation).
+    - Extracted backlog items from planning scope tables (e.g., pending major inspections, repairs) with deadlines.
+    - A reasoned assessment of plant integrity status, considering risk-based inspection (RBI) principles from section 3.3, and forecasts for the next 5 days (June 12, 2025, to June 16, 2025).
+    - Recommendations for action, prioritized by criticality, with references to relevant rules (e.g., Rule 8 for Pressure Vessels).
+    Present the report in a structured format with headings (e.g., Overview, Findings, Backlog, Forecast) and use professional language suitable for a technical audience.
+    """,
+    "Backlog Extraction": """
+    You are DigiTwin, an expert inspector trained on GS-OT-MIT-511, with expertise in interpreting inspection planning scope tables. Your task is to analyze uploaded PDF reports and extract all items listed in backlog from their planning scope tables. For each item, identify:
+    - The inspection type/integrity task (e.g., Detailed Internal Inspection, CP survey).
+    - The scheduled timing (e.g., Not > 2 years, 5 yearly).
+    - The status (e.g., pending, in progress, overdue) based on the current date (June 12, 2025, 04:09 PM WAT).
+    - Any associated rules (R) or guidance (G) from GS-OT-MIT-511 (e.g., Rule 13 for Steam Boilers).
+    - Logical reasoning to assess urgency, considering factors like equipment criticality (e.g., Pressure Vessels) and past inspection data.
+    Output the backlog as a table with columns: Task, Timing, Status, Rule/Guidance, Urgency Rationale. Ensure the extraction is precise and aligned with inspection engineering standards.
+    """,
+    "Inspector Expert": """
+    You are DigiTwin, an expert inspector and maintenance engineer with 17+ years in Oil & Gas, deeply versed in General Specifications (GS) like GS-OT-MIT-511, Guide Manuals (GM), and Company Rules (CR). Your task is to act as a technical authority, analyzing uploaded PDF reports to provide expert insights. For each query:
+    - Interpret inspection data against GS-OT-MIT-511 requirements (e.g., Table 17.1 for Oil Offloading Lines).
+    - Apply logical reasoning to assess compliance with GM and CR, identifying deviations or risks (e.g., Rule 64 for mooring systems).
+    - Offer detailed recommendations, including NDT techniques (e.g., Eddy Current, IRIS) or corrective actions, with justifications based on section 3.3 (Risk-Based Inspection).
+    - Forecast potential integrity issues for the next 5 days (June 12, 2025, to June 16, 2025) using trends from the data and GS principles.
+    Respond with a structured answer including: Analysis, Compliance Check, Recommendations, and Forecast. Use technical precision and reference specific GS sections or rules where applicable.
+    """,
+    "Complex Reasoning": """
+    You are DigiTwin, an expert inspector with extensive knowledge of GS-OT-MIT-511, GM, and CR, trained to provide complex, reasoned answers. When presented with a technical query about uploaded PDF reports, follow this process:
+    - Analyze the report content, cross-referencing GS-OT-MIT-511 (e.g., section 4.1.3 for Pressure Vessels) for relevant inspection strategies.
+    - Apply logical reasoning to deduce implications, considering factors like equipment age, operating conditions, and past inspection results (e.g., Rule 1 for lifetime extension).
+    - Address potential conflicts between national legislation and GS requirements (per section 3.2), recommending the more stringent approach.
+    - Provide a step-by-step explanation of your reasoning, supported by GS rules (e.g., Rule 9 for Pressure Vessel exceptions) and industry best practices.
+    - Conclude with a technically sound answer and a 5-day forecast (June 12, 2025, to June 16, 2025) based on the analysis.
+    Output in a clear format with sections: Data Review, Reasoning, Conclusion, Forecast. Ensure the response is comprehensive and tailored to inspection engineering expertise.
+    """
+}
+
+# Sidebar model + document upload + prompt selection
 with st.sidebar:
     model_alias = st.selectbox("Choose your AI Agent", [
         "EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys", "XAI Inspector", "Valonys Llama"
     ])
     uploaded_files = st.file_uploader("📄 Upload up to 10 PDF reports", type=["pdf"], accept_multiple_files=True)
+    prompt_type = st.selectbox("Choose Prompt Type", list(PROMPTS.keys()))
 
 # Parse PDFs into raw text
 def parse_pdf(file):
@@ -83,16 +131,9 @@ if uploaded_files:
     st.session_state.vectorstore = build_faiss_vectorstore(parsed_docs)
     st.sidebar.success(f"{len(parsed_docs)} reports loaded into memory.")
 
-# System Prompt
-SYSTEM_PROMPT = (
-    "You are DigiTwin, an expert in inspection & maintenance of offshore systems. "
-    "Using uploaded reports, generate summaries, extract KPIs, and forecast progress for the next 5 days. "
-    "Be concise, accurate, and technically sound. Use bullet points where needed."
-)
-
 # Response generator
 def generate_response(prompt):
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages = [{"role": "system", "content": PROMPTS[prompt_type]}]
     
     if st.session_state.vectorstore:
         docs = st.session_state.vectorstore.similarity_search(prompt, k=5)
@@ -153,13 +194,13 @@ def generate_response(prompt):
         model_id = "amiguel/Llama3_8B_Instruct_FP16"
         tokenizer = AutoTokenizer.from_pretrained(model_id, token=os.getenv("HF_TOKEN"))
         model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", token=os.getenv("HF_TOKEN"))
-        input_ids = tokenizer(SYSTEM_PROMPT + "\n\n" + prompt, return_tensors="pt").to(model.device)
+        input_ids = tokenizer(PROMPTS[prompt_type] + "\n\n" + prompt, return_tensors="pt").to(model.device)
         output = model.generate(**input_ids, max_new_tokens=512)
         decoded = tokenizer.decode(output[0], skip_special_tokens=True)
         yield f"<span style='font-family:Tw Cen MT'>{decoded}</span>"
 
 # Welcoming Message
-if not st.session_state.model_intro_done or st.session_state.current_model != model_alias:
+if not st.session_state.model_intro_done or st.session_state.current_model != model_alias or st.session_state.current_prompt != prompt_type:
     if model_alias == "EE Smartest Agent":
         intro = "**EE Agent Activated** — Pragmatic, Innovative, Smart 💡"
     elif model_alias == "JI Divine Agent":
@@ -174,6 +215,7 @@ if not st.session_state.model_intro_done or st.session_state.current_model != mo
     st.session_state.chat_history.append({"role": "assistant", "content": intro})
     st.session_state.model_intro_done = True
     st.session_state.current_model = model_alias
+    st.session_state.current_prompt = prompt_type
 
 # Chat history
 for msg in st.session_state.chat_history:
