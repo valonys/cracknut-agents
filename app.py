@@ -1,24 +1,25 @@
 import streamlit as st
-import fitz  # PyMuPDF
-import tempfile
 import os
 import time
+import json
+import requests
 from dotenv import load_dotenv
 from cerebras.cloud.sdk import Cerebras
 import openai
-import requests
-import json
+import tempfile
 
-# FAISS + Embeddings
-from sentence_transformers import SentenceTransformer
-import faiss
+# LangChain v0.2+ compatible imports
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitter import RecursiveCharacterTextSplitter
 
-# --- Load env
+# --- ENV ---
 load_dotenv()
 
-# --- UI Setup
+# --- UI Setup ---
 st.set_page_config(page_title="DigiTwin RAG", layout="wide")
-st.markdown("<h1 style='font-family:Tw Cen MT;'>🚀 Ataliba o Agent Nerdx 🚀</h1>", unsafe_allow_html=True)
+st.title("🚀 Ataliba o Agent Nerdx 🚀")
 
 USER_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/9904d9a0d445ab0488cf7395cb863cce7621d897/USER_AVATAR.png"
 BOT_AVATAR = "https://raw.githubusercontent.com/achilela/vila_fofoka_analysis/991f4c6e4e1dc7a8e24876ca5aae5228bcdb4dba/Ataliba_Avatar.jpg"
@@ -29,67 +30,67 @@ SYSTEM_PROMPT = (
     "PSDs, floating units, and topside inspection strategies."
 )
 
-# --- Sidebar
+# --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ Model Selection")
     model_alias = st.selectbox("Choose your AI Agent", ["EE Smartest Agent", "JI Divine Agent", "EdJa-Valonys"])
 
     st.header("📁 Upload PDF Docs")
-    uploaded_files = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Upload up to 10 PDFs", type=["pdf"], accept_multiple_files=True)
 
-# --- Memory
-if "doc_chunks" not in st.session_state:
-    st.session_state.doc_chunks = []
-if "vector_index" not in st.session_state:
-    st.session_state.vector_index = None
+# --- State Initialization ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+if "faiss_db" not in st.session_state:
+    st.session_state.faiss_db = None
+if "faiss_initialized" not in st.session_state:
+    st.session_state.faiss_initialized = False
 
-# --- Embedding model
+# --- PDF Processing ---
 @st.cache_resource
-def get_embedding_model():
-    return SentenceTransformer("all-MiniLM-L6-v2")
+def get_vectorstore(docs):
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    return FAISS.from_documents(docs, embeddings)
 
-embed_model = get_embedding_model()
+def parse_pdfs(files):
+    all_docs = []
+    for file in files:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(file.read())
+            tmp.flush()
+            loader = PyPDFLoader(tmp.name)
+            pages = loader.load()
+            all_docs.extend(pages)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
+    return splitter.split_documents(all_docs)
 
-def extract_text_from_pdf(file):
-    doc = fitz.open(stream=file.read(), filetype="pdf")
-    full_text = ""
-    for page in doc:
-        full_text += page.get_text()
-    return full_text
-
-def build_faiss_index(chunks):
-    embeddings = embed_model.encode(chunks)
-    dim = embeddings.shape[1]
-    index = faiss.IndexFlatL2(dim)
-    index.add(embeddings)
-    return index, embeddings
-
-def retrieve_top_k(query, chunks, embeddings, index, k=4):
-    query_vec = embed_model.encode([query])
-    D, I = index.search(query_vec, k)
-    return "\n---\n".join([chunks[i] for i in I[0]])
-
-# --- On upload
+# --- On File Upload ---
 if uploaded_files:
-    new_chunks = []
-    for file in uploaded_files:
-        text = extract_text_from_pdf(file)
-        split = [text[i:i+800] for i in range(0, len(text), 800)]
-        new_chunks.extend(split)
+    if not st.session_state.faiss_initialized:
+        try:
+            split_docs = parse_pdfs(uploaded_files)
+            st.session_state.faiss_db = get_vectorstore(split_docs)
+            st.session_state.faiss_initialized = True
+            st.sidebar.success(f"✅ {len(split_docs)} document chunks indexed.")
+        except Exception as e:
+            st.sidebar.error(f"❌ Failed to process PDFs: {e}")
 
-    st.session_state.doc_chunks = new_chunks
-    st.session_state.vector_index, st.session_state.embeddings_matrix = build_faiss_index(new_chunks)
-    st.sidebar.success(f"✅ {len(uploaded_files)} PDFs processed with {len(new_chunks)} chunks.")
+# --- Retrieve Context ---
+def retrieve_context(query, db, k=4):
+    try:
+        results = db.similarity_search(query, k=k)
+        return "\n---\n".join([doc.page_content for doc in results])
+    except Exception as e:
+        st.warning(f"⚠️ Document retrieval failed: {e}")
+        return ""
 
-# --- Display chat
+# --- Chat Display ---
 for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"], avatar=USER_AVATAR if msg["role"] == "user" else BOT_AVATAR):
         st.markdown(msg["content"])
 
-# --- User prompt
-if prompt := st.chat_input("Ask anything based on the docs..."):
+# --- Prompt Input ---
+if prompt := st.chat_input("Ask about inspection, maintenance, or documents..."):
     st.session_state.chat_history.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt)
@@ -98,15 +99,10 @@ if prompt := st.chat_input("Ask anything based on the docs..."):
         response_placeholder = st.empty()
         full_response = ""
 
-        # RAG Context
-        try:
-            context = retrieve_top_k(prompt, st.session_state.doc_chunks, st.session_state.embeddings_matrix, st.session_state.vector_index)
-            final_prompt = f"{SYSTEM_PROMPT}\n\nContext:\n{context}\n\nQuestion:\n{prompt}"
-        except Exception as e:
-            final_prompt = f"{SYSTEM_PROMPT}\n\nQuestion:\n{prompt}"
-            st.warning(f"⚠️ Document retrieval failed: {e}")
+        # Context injection
+        context = retrieve_context(prompt, st.session_state.faiss_db) if st.session_state.faiss_db else ""
+        final_prompt = f"{SYSTEM_PROMPT}\n\nContext:\n{context}\n\nQuestion: {prompt}"
 
-        # Model Routing
         def generate_response(prompt):
             messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
             try:
@@ -115,7 +111,7 @@ if prompt := st.chat_input("Ask anything based on the docs..."):
                         "https://api.x.ai/v1/chat/completions",
                         headers={"Authorization": f"Bearer {os.getenv('API_KEY')}", "Content-Type": "application/json"},
                         json={"model": "grok-beta", "messages": messages, "temperature": 0.2, "stream": True},
-                        stream=True,
+                        stream=True
                     )
                     for line in response.iter_lines():
                         if line:
@@ -126,10 +122,7 @@ if prompt := st.chat_input("Ask anything based on the docs..."):
                             yield delta
 
                 elif model_alias == "JI Divine Agent":
-                    client = openai.OpenAI(
-                        api_key=os.getenv("DEEPSEEK_API_KEY"),
-                        base_url="https://api.sambanova.ai/v1"
-                    )
+                    client = openai.OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.sambanova.ai/v1")
                     response = client.chat.completions.create(
                         model="DeepSeek-R1-Distill-Llama-70B",
                         messages=messages,
@@ -139,8 +132,7 @@ if prompt := st.chat_input("Ask anything based on the docs..."):
                     )
                     for chunk in response:
                         if chunk.choices[0].delta.content:
-                            content = chunk.choices[0].delta.content
-                            yield content
+                            yield chunk.choices[0].delta.content
 
                 elif model_alias == "EdJa-Valonys":
                     client = Cerebras(api_key=os.getenv("CEREBRAS_API_KEY"))
@@ -157,7 +149,6 @@ if prompt := st.chat_input("Ask anything based on the docs..."):
             except Exception as e:
                 yield f"⚠️ API Error: {e}"
 
-        # Stream output
         for chunk in generate_response(final_prompt):
             full_response += chunk
             response_placeholder.markdown(full_response + "▌")
