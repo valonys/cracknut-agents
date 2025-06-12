@@ -59,7 +59,7 @@ with st.sidebar:
             st.session_state.faiss_db = process_uploaded_pdfs(uploaded_files)
             st.session_state.faiss_initialized = True
             st.sidebar.success(f"✅ {len(uploaded_files)} PDF(s) processed and indexed.")
-     else:
+    else:
           st.session_state.faiss_db = None
           st.session_state.faiss_initialized = False
 
