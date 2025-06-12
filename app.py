@@ -86,7 +86,7 @@ def generate_response(prompt):
             response = requests.post(
                 "https://api.x.ai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {os.getenv('API_KEY')}", "Content-Type": "application/json"},
-                json={"model": "grok-beta", "messages": messages, "temperature": 0.3, "stream": True},
+                json={"model": "grok-3", "messages": messages, "temperature": 0.3, "stream": True},
                 stream=True
             )
             for line in response.iter_lines():
