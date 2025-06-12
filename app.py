@@ -55,13 +55,13 @@ with st.sidebar:
     uploaded_files: # = st.file_uploader("Upload up to 10 PDFs", type=["pdf"], accept_multiple_files=True)
     if uploaded_files:
         #st.session_state.faiss_db = None
-    if "faiss_initialized" not in st.session_state:
-        st.session_state.faiss_db = process_uploaded_pdfs(uploaded_files)
-        st.session_state.faiss_initialized = True
-        st.sidebar.success(f"✅ {len(uploaded_files)} PDF(s) processed and indexed.")
-   else:
-        st.session_state.faiss_db = None
-        st.session_state.faiss_initialized = False
+        if "faiss_initialized" not in st.session_state:
+            st.session_state.faiss_db = process_uploaded_pdfs(uploaded_files)
+            st.session_state.faiss_initialized = True
+            st.sidebar.success(f"✅ {len(uploaded_files)} PDF(s) processed and indexed.")
+     else:
+          st.session_state.faiss_db = None
+          st.session_state.faiss_initialized = False
 
 
 # --- FAISS Setup ---
