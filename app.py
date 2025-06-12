@@ -19,12 +19,15 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 # --- Styling ---
 st.set_page_config(page_title="Forecast RAG App", layout="wide")
-#st.markdown("""
-#    <style>
-#    @import url('https://fonts.cdnfonts.com/css/tw-cen-mt');
-#    * { font-family: 'Tw Cen MT', sans-serif; }
-#    </style>
-#    """, unsafe_allow_html=True)
+
+# Apply custom font styling
+st.markdown("""
+    <style>
+    @import url('https://fonts.cdnfonts.com/css/tw-cen-mt');
+    * { font-family: 'Tw Cen MT', sans-serif; }
+    </style>
+    """, unsafe_allow_html=True)
+
 
 
 # --- UI Avatars ---
