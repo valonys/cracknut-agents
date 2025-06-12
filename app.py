@@ -93,13 +93,16 @@ def generate_response(prompt):
                 if line:
                     try:
                         chunk = json.loads(line.decode().replace("data: ", ""))
-                        if "choices" in chunk and "delta" in chunk["choices"][0]:
-                            delta = chunk["choices"][0]["delta"].get("content", "")
-                            full_response += delta
-                            yield f"<span style='font-family:Tw Cen MT'>{delta}</span>"
+                        choices = chunk.get("choices")
+                        if choices and isinstance(choices, list):
+                            delta = choices[0].get("delta", {}).get("content", "")
+                            if delta:
+                                full_response += delta
+                                yield f"<span style='font-family:Tw Cen MT'>{delta}</span>"
+                                
                     except Exception as e:
                         yield f"<span style='font-family:Tw Cen MT'>⚠️ API Parse Error: {str(e)}</span>"
-
+           
         elif model_alias == "JI Divine Agent":
             client = openai.OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.sambanova.ai/v1")
             response = client.chat.completions.create(model="DeepSeek-R1-Distill-Llama-70B", messages=messages, stream=True)
