@@ -19,7 +19,7 @@ from cerebras.cloud.sdk import Cerebras
 load_dotenv()
 
 st.set_page_config(page_title="DigiTwin RAG Forecast", layout="centered")
-st.title("📊 DigiTwin Insp")
+st.title("📊 DigiTwin the Nerdxz")
 
 # Font Style
 st.markdown("""
