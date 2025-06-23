@@ -18,7 +18,7 @@ from cerebras.cloud.sdk import Cerebras
 
 load_dotenv()
 
-st.set_page_config(page_title="DigiTwin RAG Forecast", layout="centered")
+st.set_page_config(page_title="DigiTal Twin", layout="centered")
 st.title("📊 DigiTwin the Nerdxz")
 
 # Font Style
